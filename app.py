@@ -4,7 +4,7 @@ app = Flask(__name__)
 
 # Global state memory cache
 server_state = {
-    "active_password": "1234",
+    "active_password": "0",
     "pixel_queue": [],
     "reset_signal": False
 }
@@ -126,7 +126,7 @@ HTML_TEMPLATE = """
 <body>
 
     <div class="container">
-        <h1>🎨 16x16 Matrix Studio</h1>
+        <h1>Httpmitter</h1>
         
         <div class="config-section">
             <label>Transmitter Password (Game & Web Match)</label>
@@ -146,9 +146,9 @@ HTML_TEMPLATE = """
 
         <div class="grid" id="pixel-matrix"></div>
 
-        <button class="btn" onclick="sendFrame()">📤 Transmit Frame</button>
-        <button class="btn stop-btn" onclick="stopTransmission()">⏹️ Stop Transmission</button>
-        <button class="btn clear-btn" onclick="clearGrid()">🗑️ Clear Matrix</button>
+        <button class="btn" onclick="sendFrame()">transmit frame</button>
+        <button class="btn stop-btn" onclick="stopTransmission()">force stop transmission + reset screen</button>
+        <button class="btn clear-btn" onclick="clearGrid()">clear drawing frame</button>
         
         <div class="status-box" id="status">Ready. Draw your design.</div>
     </div>
@@ -159,7 +159,6 @@ HTML_TEMPLATE = """
         let selectedColor = { r: 3, g: 0, b: 0, hex: '#ff0000' };
         let isDrawing = false;
 
-        // 16x16 grid = 256 pixels total
         for (let i = 0; i < 256; i++) {
             const pixel = document.createElement('div');
             pixel.classList.add('pixel');
@@ -205,7 +204,6 @@ HTML_TEMPLATE = """
             const dataPayload = [];
             const userPass = document.getElementById('tx-password').value;
 
-            // Find the last active pixel on a 16x16 grid
             let lastActiveIndex = -1;
             pixels.forEach((p, idx) => {
                 if (parseInt(p.dataset.r) > 0 || parseInt(p.dataset.g) > 0 || parseInt(p.dataset.b) > 0) {
@@ -244,7 +242,7 @@ HTML_TEMPLATE = """
                 
                 const resData = await response.json();
                 if (response.ok) {
-                    document.getElementById('status').innerText = `Success! Streaming up to pixel ${lastActiveIndex}.`;
+                    document.getElementById('status').innerText = `Success ${lastActiveIndex}.`;
                 } else {
                     document.getElementById('status').innerText = "Error: " + (resData.error || "Failed submission");
                 }
@@ -255,7 +253,7 @@ HTML_TEMPLATE = """
 
         async function stopTransmission() {
             const userPass = document.getElementById('tx-password').value;
-            document.getElementById('status').innerText = "Stopping transmission & resetting screen...";
+            document.getElementById('status').innerText = "stopping transmission & resetting screen";
 
             try {
                 const response = await fetch('/stop-queue', {
@@ -265,12 +263,12 @@ HTML_TEMPLATE = """
                 });
                 
                 if (response.ok) {
-                    document.getElementById('status').innerText = "🛑 Transmission stopped & screen reset!";
+                    document.getElementById('status').innerText = "stopped + reset";
                 } else {
-                    document.getElementById('status').innerText = "Failed to stop.";
+                    document.getElementById('status').innerText = "error";
                 }
             } catch (err) {
-                document.getElementById('status').innerText = "Connection error.";
+                document.getElementById('status').innerText = "connection error.";
             }
         }
     </script>
@@ -292,20 +290,21 @@ def queue_matrix():
     server_state["pixel_queue"] = []
     server_state["reset_signal"] = False
 
-    # 1. Screen Reset pulse at the very beginning
-    server_state["pixel_queue"].append({"value": "00000010"})
-
-    # 2. Two-Step Clock Pulse per pixel: Data setup (Clock=0) then Clock Tick (Clock=1)
-    for p in data["pixels"]:
+    # Queue pixels using two-step clock pulse per pixel
+    for idx, p in enumerate(data["pixels"]):
         bin_r = format(p["r"] & 3, '02b')
         bin_g = format(p["g"] & 3, '02b')
         bin_b = format(p["b"] & 3, '02b')
         rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
         
-        # Step A: Send Data with Clock OFF (0)
-        server_state["pixel_queue"].append({"value": f"{rgb_6bit}00"})
-        
-        # Step B: Send Data with Clock ON (1) to clock it in
+        if idx == 0:
+            # First pixel triggers the screen reset simultaneously with its data setup (Reset=1, Clock=0)
+            server_state["pixel_queue"].append({"value": f"{rgb_6bit}10"})
+        else:
+            # Regular data setup (Reset=0, Clock=0)
+            server_state["pixel_queue"].append({"value": f"{rgb_6bit}00"})
+            
+        # Step B: Clock Tick (Reset=0, Clock=0.5) for this pixel
         server_state["pixel_queue"].append({"value": f"{rgb_6bit}01"})
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
