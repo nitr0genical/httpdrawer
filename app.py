@@ -4,7 +4,7 @@ app = Flask(__name__)
 
 # Global state memory cache
 server_state = {
-    "active_password": "1234",  # Default fallback password
+    "active_password": "1234",
     "pixel_queue": []
 }
 
@@ -112,9 +112,12 @@ HTML_TEMPLATE = """
             cursor: pointer;
             width: 100%;
             transition: 0.2s;
+            margin-bottom: 8px;
         }
         .btn:hover { background-color: #059669; }
-        .clear-btn { background-color: #ef4444; margin-top: 8px; }
+        .stop-btn { background-color: #f59e0b; }
+        .stop-btn:hover { background-color: #d97706; }
+        .clear-btn { background-color: #ef4444; }
         .clear-btn:hover { background-color: #dc2626; }
         .status-box { margin-top: 15px; font-size: 13px; color: #38bdf8; min-height: 20px; }
     </style>
@@ -143,6 +146,7 @@ HTML_TEMPLATE = """
         <div class="grid" id="pixel-matrix"></div>
 
         <button class="btn" onclick="sendFrame()">📤 Transmit Frame</button>
+        <button class="btn stop-btn" onclick="stopTransmission()">⏹️ Stop Transmission</button>
         <button class="btn clear-btn" onclick="clearGrid()">🗑️ Clear Matrix</button>
         
         <div class="status-box" id="status">Ready. Draw your design.</div>
@@ -191,7 +195,7 @@ HTML_TEMPLATE = """
                 p.style.backgroundColor = '#000000';
                 p.dataset.r = "0"; p.dataset.g = "0"; p.dataset.b = "0";
             });
-            document.getElementById('status').innerText = "Matrix cleared.";
+            document.getElementById('status').innerText = "Matrix cleared locally.";
         }
 
         async function sendFrame() {
@@ -211,7 +215,7 @@ HTML_TEMPLATE = """
                 });
             });
 
-            document.getElementById('status').innerText = "Transmitting to server...";
+            document.getElementById('status').innerText = "Transmitting frame queue...";
             
             try {
                 const response = await fetch('/queue-matrix', {
@@ -225,12 +229,33 @@ HTML_TEMPLATE = """
                 
                 const resData = await response.json();
                 if (response.ok) {
-                    document.getElementById('status').innerText = `Success! Enqueued ${resData.count} pixels.`;
+                    document.getElementById('status').innerText = `Success! Transmitting ${resData.count} pixels to game.`;
                 } else {
                     document.getElementById('status').innerText = "Error: " + (resData.error || "Failed submission");
                 }
             } catch (err) {
-                document.getElementById('status').innerText = "Connection error. Check server logs.";
+                document.getElementById('status').innerText = "Connection error.";
+            }
+        }
+
+        async function stopTransmission() {
+            const userPass = document.getElementById('tx-password').value;
+            document.getElementById('status').innerText = "Stopping transmission...";
+
+            try {
+                const response = await fetch('/stop-queue', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: userPass })
+                });
+                
+                if (response.ok) {
+                    document.getElementById('status').innerText = "🛑 Transmission stopped & queue cleared!";
+                } else {
+                    document.getElementById('status').innerText = "Failed to stop.";
+                }
+            } catch (err) {
+                document.getElementById('status').innerText = "Connection error.";
             }
         }
     </script>
@@ -252,20 +277,25 @@ def queue_matrix():
     server_state["pixel_queue"] = []
 
     for p in data["pixels"]:
-        # Convert RGB values to 2-bit binary strings and combine into 6-bit string
         bin_r = format(p["r"] & 3, '02b')
         bin_g = format(p["g"] & 3, '02b')
         bin_b = format(p["b"] & 3, '02b')
         binary_rgb = f"{bin_r}{bin_g}{bin_b}"
         
         server_state["pixel_queue"].append({
-            "pixel_index": p["index"],
-            "x": p["x"],
-            "y": p["y"],
-            "value": binary_rgb  # Format expected by the game block
+            "value": binary_rgb
         })
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
+
+# NEW: Stop endpoint to instantly empty the queue from the website
+@app.post("/stop-queue")
+def stop_queue():
+    data = request.json
+    if data and "password" in data and str(data["password"]) == server_state["active_password"]:
+        server_state["pixel_queue"] = []
+        return jsonify({"status": "stopped"}), 200
+    return jsonify({"error": "Unauthorized"}), 401
 
 @app.route('/roblox', methods=["GET"])
 def roblox_communication():
@@ -274,11 +304,9 @@ def roblox_communication():
     if incoming_pass != server_state["active_password"]:
         return jsonify({"value": "000000"}), 401
         
-    # Pop the next pixel in sequence from left-to-right, top-to-bottom
     if len(server_state["pixel_queue"]) > 0:
         return jsonify(server_state["pixel_queue"].pop(0)), 200
         
-    # Return a dummy 6-bit black string instead of nil/idle so the game script doesn't crash
     return jsonify({"value": "000000"}), 200
 
 if __name__ == '__main__':
