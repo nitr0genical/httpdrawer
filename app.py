@@ -1,9 +1,6 @@
-from flask import Flask, jsonify, request, render_template_string, abort
+from flask import Flask, jsonify, request, render_template_string
 
 app = Flask(__name__)
-
-# 🔐 SECURITY CONFIGURATION
-SECRET_CANVAS_PATH = "mysecretcanvas99"  # Change this to your secret URL path extensions
 
 # Global state memory cache
 server_state = {
@@ -158,7 +155,6 @@ HTML_TEMPLATE = """
         let selectedColor = { r: 255, g: 0, b: 0, hex: '#ff0000' };
         let isDrawing = false;
 
-        // Populate 16x16 Matrix (256 pixels)
         for (let i = 0; i < 256; i++) {
             const pixel = document.createElement('div');
             pixel.classList.add('pixel');
@@ -243,26 +239,20 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# 1. ROOT ENTRY POINT: Block public discovery
+# 1. PUBLIC ROOT ENTRY POINT (Now opens the drawing tool immediately)
 @app.route("/", methods=["GET"])
 def index():
-    abort(404)
-
-# 2. PRIVATE GUI ACCESS VIA SECURED PATH
-@app.route(f"/{SECRET_CANVAS_PATH}", methods=["GET"])
-def secret_dashboard():
     return render_template_string(HTML_TEMPLATE)
 
-# 3. QUEUE PROCESSING ENDPOINT (Receives from Web)
+# 2. QUEUE PROCESSING ENDPOINT (Receives from Web)
 @app.post("/queue-matrix")
 def queue_matrix():
     data = request.json
     if not data or "pixels" not in data or "password" not in data:
         return jsonify({"error": "Malformed payload structure"}), 400
     
-    # Update active security password
     server_state["active_password"] = str(data["password"])
-    server_state["pixel_queue"] = []  # Reset queue for the new frame
+    server_state["pixel_queue"] = []
 
     for p in data["pixels"]:
         server_state["pixel_queue"].append({
@@ -276,7 +266,7 @@ def queue_matrix():
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
 
-# 4. ROBLOX HTTP TRANSMITTER ENDPOINT (Receives from In-Game Script)
+# 3. ROBLOX HTTP TRANSMITTER ENDPOINT
 @app.route('/roblox', methods=["GET"])
 def roblox_communication():
     incoming_pass = request.headers.get("Password")
