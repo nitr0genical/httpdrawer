@@ -16,7 +16,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>15x15 Matrix Transmitter Studio</title>
+    <title>16x16 Matrix Transmitter Studio</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -68,8 +68,8 @@ HTML_TEMPLATE = """
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(15, 20px);
-            grid-template-rows: repeat(15, 20px);
+            grid-template-columns: repeat(16, 20px);
+            grid-template-rows: repeat(16, 20px);
             gap: 1px;
             background-color: #334155;
             padding: 4px;
@@ -126,7 +126,7 @@ HTML_TEMPLATE = """
 <body>
 
     <div class="container">
-        <h1>🎨 15x15 Matrix Studio</h1>
+        <h1>🎨 16x16 Matrix Studio</h1>
         
         <div class="config-section">
             <label>Transmitter Password (Game & Web Match)</label>
@@ -159,7 +159,8 @@ HTML_TEMPLATE = """
         let selectedColor = { r: 3, g: 0, b: 0, hex: '#ff0000' };
         let isDrawing = false;
 
-        for (let i = 0; i < 225; i++) {
+        // 16x16 grid = 256 pixels total
+        for (let i = 0; i < 256; i++) {
             const pixel = document.createElement('div');
             pixel.classList.add('pixel');
             pixel.dataset.index = i;
@@ -204,6 +205,7 @@ HTML_TEMPLATE = """
             const dataPayload = [];
             const userPass = document.getElementById('tx-password').value;
 
+            // Find the last active pixel on a 16x16 grid
             let lastActiveIndex = -1;
             pixels.forEach((p, idx) => {
                 if (parseInt(p.dataset.r) > 0 || parseInt(p.dataset.g) > 0 || parseInt(p.dataset.b) > 0) {
@@ -220,8 +222,8 @@ HTML_TEMPLATE = """
                 const p = pixels[i];
                 dataPayload.push({ 
                     index: i, 
-                    x: i % 15, 
-                    y: Math.floor(i / 15), 
+                    x: i % 16, 
+                    y: Math.floor(i / 16), 
                     r: parseInt(p.dataset.r), 
                     g: parseInt(p.dataset.g), 
                     b: parseInt(p.dataset.b) 
@@ -293,17 +295,17 @@ def queue_matrix():
     # 1. Screen Reset pulse at the very beginning
     server_state["pixel_queue"].append({"value": "00000010"})
 
-    # 2. For each pixel, push TWO steps: Data Setup (Clock=0) then Clock Pulse (Clock=1)
+    # 2. Two-Step Clock Pulse per pixel: Data setup (Clock=0) then Clock Tick (Clock=1)
     for p in data["pixels"]:
         bin_r = format(p["r"] & 3, '02b')
         bin_g = format(p["g"] & 3, '02b')
         bin_b = format(p["b"] & 3, '02b')
         rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
         
-        # Step A: Send Data with Clock OFF (0) so screen reads RRGGBB first
+        # Step A: Send Data with Clock OFF (0)
         server_state["pixel_queue"].append({"value": f"{rgb_6bit}00"})
         
-        # Step B: Send Data with Clock ON (1) right after to clock it in
+        # Step B: Send Data with Clock ON (1) to clock it in
         server_state["pixel_queue"].append({"value": f"{rgb_6bit}01"})
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
