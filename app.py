@@ -130,7 +130,7 @@ HTML_TEMPLATE = """
         
         <div class="config-section">
             <label>Transmitter Password (Game & Web Match)</label>
-            <input type="text" id="tx-password" value="1234" placeholder="Enter matching pass...">
+            <input type="text" id="tx-password" value="1234" placeholder="enter matching pass...">
         </div>
         
         <div class="palette">
@@ -150,7 +150,7 @@ HTML_TEMPLATE = """
         <button class="btn stop-btn" onclick="stopTransmission()">force stop transmission + reset screen</button>
         <button class="btn clear-btn" onclick="clearGrid()">clear drawing frame</button>
         
-        <div class="status-box" id="status">Ready. Draw your design.</div>
+        <div class="status-box" id="status">ready</div>
     </div>
 
     <script>
@@ -212,7 +212,7 @@ HTML_TEMPLATE = """
             });
 
             if (lastActiveIndex === -1) {
-                document.getElementById('status').innerText = "Matrix is empty! Draw something first.";
+                document.getElementById('status').innerText = "frame is empty! draw something first.";
                 return;
             }
 
@@ -228,7 +228,7 @@ HTML_TEMPLATE = """
                 });
             }
 
-            document.getElementById('status').innerText = `Transmitting ${dataPayload.length} active pixels...`;
+            document.getElementById('status').innerText = `transmitting ${dataPayload.length} active pixels...`;
             
             try {
                 const response = await fetch('/queue-matrix', {
@@ -242,12 +242,12 @@ HTML_TEMPLATE = """
                 
                 const resData = await response.json();
                 if (response.ok) {
-                    document.getElementById('status').innerText = `Success ${lastActiveIndex}.`;
+                    document.getElementById('status').innerText = `success`;
                 } else {
-                    document.getElementById('status').innerText = "Error: " + (resData.error || "Failed submission");
+                    document.getElementById('status').innerText = "error: " + (resData.error || "Failed submission");
                 }
             } catch (err) {
-                document.getElementById('status').innerText = "Connection error.";
+                document.getElementById('status').innerText = "connection error.";
             }
         }
 
@@ -298,13 +298,13 @@ def queue_matrix():
         rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
         
         if idx == 0:
-            # First pixel triggers the screen reset simultaneously with its data setup (Reset=1, Clock=0)
+            # First pixel triggers screen reset simultaneously with its data setup (Reset=1, Clock=0)
             server_state["pixel_queue"].append({"value": f"{rgb_6bit}10"})
         else:
             # Regular data setup (Reset=0, Clock=0)
             server_state["pixel_queue"].append({"value": f"{rgb_6bit}00"})
             
-        # Step B: Clock Tick (Reset=0, Clock=0.5) for this pixel
+        # Step B: Clock Tick (Reset=0, Clock=1)
         server_state["pixel_queue"].append({"value": f"{rgb_6bit}01"})
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
@@ -321,6 +321,9 @@ def stop_queue():
 @app.route('/roblox', methods=["GET"])
 def roblox_communication():
     incoming_pass = request.headers.get("Password")
+    
+    # Read optional GET parameters sent from the game if configured
+    client_status = request.args.get("client_status", "unknown")
     
     if incoming_pass != server_state["active_password"]:
         return jsonify({"value": "00000000"}), 200
