@@ -2,12 +2,12 @@ from flask import Flask, jsonify, request, render_template_string, abort
 
 app = Flask(__name__)
 
-# 🔐 SECURITY ARCHITECTURE
+# 🔐 SECURITY CONFIGURATION
 SECRET_CANVAS_PATH = "mysecretcanvas99"  # Change this to your secret URL path extensions
 
 # Global state memory cache
 server_state = {
-    "active_password": "1234",  # Fallback default password
+    "active_password": "1234",  # Default fallback password
     "pixel_queue": []
 }
 
@@ -18,7 +18,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Private Studio Matrix</title>
+    <title>16x16 Matrix Transmitter Studio</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -39,7 +39,7 @@ HTML_TEMPLATE = """
             box-shadow: 0 10px 30px rgba(0,0,0,0.6);
             border: 1px solid #334155;
             text-align: center;
-            width: 360px;
+            width: 380px;
         }
         h1 { color: #38bdf8; margin: 0 0 15px 0; font-size: 22px; }
         
@@ -97,8 +97,8 @@ HTML_TEMPLATE = """
             flex-wrap: wrap;
         }
         .swatch {
-            width: 30px;
-            height: 30px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             cursor: pointer;
             border: 3px solid transparent;
@@ -109,7 +109,7 @@ HTML_TEMPLATE = """
             color: white;
             border: none;
             padding: 12px 24px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
             border-radius: 8px;
             cursor: pointer;
@@ -125,40 +125,40 @@ HTML_TEMPLATE = """
 <body>
 
     <div class="container">
-        <h1>🎨 Matrix Studio</h1>
+        <h1>🎨 16x16 Matrix Studio</h1>
         
         <!-- Authentication Configuration Layer -->
         <div class="config-section">
-            <label>Transmitter Password Setup</label>
-            <input type="text" id="tx-password" value="1234" placeholder="Enter custom pass...">
+            <label>Transmitter Password (Game & Web Match)</label>
+            <input type="text" id="tx-password" value="1234" placeholder="Enter matching pass...">
         </div>
         
         <div class="palette">
-            <div class="swatch active" style="background-color: #ff0000;" data-r="3" data-g="0" data-b="0"></div>
-            <div class="swatch" style="background-color: #00ff00;" data-r="0" data-g="3" data-b="0"></div>
-            <div class="swatch" style="background-color: #0000ff;" data-r="0" data-g="0" data-b="3"></div>
-            <div class="swatch" style="background-color: #ffff00;" data-r="3" data-g="3" data-b="0"></div>
-            <div class="swatch" style="background-color: #00ffff;" data-r="0" data-g="3" data-b="3"></div>
-            <div class="swatch" style="background-color: #ff00ff;" data-r="3" data-g="0" data-b="3"></div>
-            <div class="swatch" style="background-color: #ffffff;" data-r="3" data-g="3" data-b="3"></div>
+            <div class="swatch active" style="background-color: #ff0000;" data-r="255" data-g="0" data-b="0"></div>
+            <div class="swatch" style="background-color: #00ff00;" data-r="0" data-g="255" data-b="0"></div>
+            <div class="swatch" style="background-color: #0000ff;" data-r="0" data-g="0" data-b="255"></div>
+            <div class="swatch" style="background-color: #ffff00;" data-r="255" data-g="255" data-b="0"></div>
+            <div class="swatch" style="background-color: #00ffff;" data-r="0" data-g="255" data-b="255"></div>
+            <div class="swatch" style="background-color: #ff00ff;" data-r="255" data-g="0" data-b="255"></div>
+            <div class="swatch" style="background-color: #ffffff;" data-r="255" data-g="255" data-b="255"></div>
             <div class="swatch" style="background-color: #000000;" data-r="0" data-g="0" data-b="0"></div>
         </div>
 
         <div class="grid" id="pixel-matrix"></div>
 
-        <button class="btn" onclick="sendFrame()">📤 Send Frame to Roblox</button>
+        <button class="btn" onclick="sendFrame()">📤 Transmit Frame</button>
         <button class="btn clear-btn" onclick="clearGrid()">🗑️ Clear Matrix</button>
         
-        <div class="status-box" id="status">Ready. Draw your matrix grid.</div>
+        <div class="status-box" id="status">Ready. Draw your design.</div>
     </div>
 
     <script>
         const grid = document.getElementById('pixel-matrix');
         const swatches = document.querySelectorAll('.swatch');
-        let selectedColor = { r: 3, g: 0, b: 0, hex: '#ff0000' };
+        let selectedColor = { r: 255, g: 0, b: 0, hex: '#ff0000' };
         let isDrawing = false;
 
-        // Populate Matrix Architecture
+        // Populate 16x16 Matrix (256 pixels)
         for (let i = 0; i < 256; i++) {
             const pixel = document.createElement('div');
             pixel.classList.add('pixel');
@@ -175,13 +175,20 @@ HTML_TEMPLATE = """
             swatch.addEventListener('click', () => {
                 document.querySelector('.swatch.active').classList.remove('active');
                 swatch.classList.add('active');
-                selectedColor = { r: swatch.dataset.r, g: swatch.dataset.g, b: swatch.dataset.b, hex: swatch.style.backgroundColor };
+                selectedColor = { 
+                    r: parseInt(swatch.dataset.r), 
+                    g: parseInt(swatch.dataset.g), 
+                    b: parseInt(swatch.dataset.b), 
+                    hex: swatch.style.backgroundColor 
+                };
             });
         });
 
         function paint(pixel) {
             pixel.style.backgroundColor = selectedColor.hex;
-            pixel.dataset.r = selectedColor.r; pixel.dataset.g = selectedColor.g; pixel.dataset.b = selectedColor.b;
+            pixel.dataset.r = selectedColor.r; 
+            pixel.dataset.g = selectedColor.g; 
+            pixel.dataset.b = selectedColor.b;
         }
 
         function clearGrid() {
@@ -209,7 +216,7 @@ HTML_TEMPLATE = """
                 });
             });
 
-            document.getElementById('status').innerText = "Compressing & sending queue...";
+            document.getElementById('status').innerText = "Transmitting to server...";
             
             try {
                 const response = await fetch('/queue-matrix', {
@@ -223,12 +230,12 @@ HTML_TEMPLATE = """
                 
                 const resData = await response.json();
                 if (response.ok) {
-                    document.getElementById('status').innerText = `Success! Saved password & enqueued ${resData.count} pixels.`;
+                    document.getElementById('status').innerText = `Success! Enqueued ${resData.count} pixels.`;
                 } else {
                     document.getElementById('status').innerText = "Error: " + (resData.error || "Failed submission");
                 }
             } catch (err) {
-                document.getElementById('status').innerText = "Connection error. Check Render log status.";
+                document.getElementById('status').innerText = "Connection error. Check server logs.";
             }
         }
     </script>
@@ -236,53 +243,50 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# 1. ROOT ENTRY POINT: Blocked public pathing
+# 1. ROOT ENTRY POINT: Block public discovery
 @app.route("/", methods=["GET"])
 def index():
     abort(404)
 
-# 2. PRIVATE GUI ACCESS VIA SECURED PATH ROUTE
+# 2. PRIVATE GUI ACCESS VIA SECURED PATH
 @app.route(f"/{SECRET_CANVAS_PATH}", methods=["GET"])
 def secret_dashboard():
     return render_template_string(HTML_TEMPLATE)
 
-# 3. ROOT PATH QUEUE PROCESSING ENDPOINT
+# 3. QUEUE PROCESSING ENDPOINT (Receives from Web)
 @app.post("/queue-matrix")
 def queue_matrix():
     data = request.json
     if not data or "pixels" not in data or "password" not in data:
         return jsonify({"error": "Malformed payload structure"}), 400
     
-    # Save the custom password defined inside your canvas input text box
+    # Update active security password
     server_state["active_password"] = str(data["password"])
-    server_state["pixel_queue"] = []  # Clear out history array configurations
+    server_state["pixel_queue"] = []  # Reset queue for the new frame
 
     for p in data["pixels"]:
-        bin_r = format(p["r"], '02b')
-        bin_g = format(p["g"], '02b')
-        bin_b = format(p["b"], '02b')
-        binary_rgb = f"{bin_r}{bin_g}{bin_b}"
-        
         server_state["pixel_queue"].append({
             "pixel_index": p["index"],
             "x": p["x"],
             "y": p["y"],
-            "binary_rgb": binary_rgb,
-            "r_val": p["r"],
-            "g_val": p["g"],
-            "b_val": p["b"]
+            "r": p["r"],
+            "g": p["g"],
+            "b": p["b"]
         })
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
 
+# 4. ROBLOX HTTP TRANSMITTER ENDPOINT (Receives from In-Game Script)
 @app.route('/roblox', methods=["GET"])
 def roblox_communication():
-    # Read authorization keys passed from the game
     incoming_pass = request.headers.get("Password")
+    
     if incoming_pass != server_state["active_password"]:
-        return jsonify({"error": "Unauthorized. Password header mismatch."}), 401
+        return jsonify({"error": "Unauthorized. Password mismatch."}), 401
+        
     if len(server_state["pixel_queue"]) > 0:
         return jsonify(server_state["pixel_queue"].pop(0)), 200
+        
     return jsonify({"status": "idle"}), 200
 
 if __name__ == '__main__':
