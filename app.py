@@ -16,7 +16,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>16x16 Matrix Transmitter Studio</title>
+    <title>HTTP drawer</title>
     <style>
         body {
             font-family: 'Courier New', Courier, monospace;
@@ -296,8 +296,8 @@ def queue_matrix():
     server_state["pixel_queue"] = []
     server_state["reset_signal"] = False
 
-    # 1. Initial Reset signal with clock high (or low depending on your preference)
-    server_state["pixel_queue"].append({"value": "00000011"})
+    # 1. Initial Reset signal with Clock = 0 (00000010 -> Reset=1, Clock=0)
+    server_state["pixel_queue"].append({"value": "00000010"})
 
     # 2. Stream pixels with Clock permanently set to 1 (C=1)
     for idx, p in enumerate(data["pixels"]):
@@ -306,7 +306,7 @@ def queue_matrix():
         bin_b = format(p["b"] & 3, '02b')
         rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
         
-        # Reset=0, Clock=1 (Always active clock)
+        # Reset=0, Clock=1
         server_state["pixel_queue"].append({"value": f"{rgb_6bit}01"})
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
@@ -330,7 +330,7 @@ def roblox_communication():
         
     if server_state["reset_signal"]:
         server_state["reset_signal"] = False
-        return jsonify({"value": "00000010"}), 200  
+        return jsonify({"value": "00000010"}), 200  # Reset=1, Clock=0
         
     if len(server_state["pixel_queue"]) > 0:
         return jsonify(server_state["pixel_queue"].pop(0)), 200
