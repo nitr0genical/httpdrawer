@@ -1,13 +1,15 @@
-from flask import Flask, jsonify, request, render_template_string
+from flask import Flask, jsonify, request, render_template_string, abort
 
 app = Flask(__name__)
 
-# Server configuration
-PASSWORD = "1234"  # Match this password in your Roblox Transmitter Header
-BIT_LENGTH = 6     # 2 bits Red, 2 bits Green, 2 bits Blue
+# 🔐 SECURITY ARCHITECTURE
+SECRET_CANVAS_PATH = "mysecretcanvas99"  # Change this to your secret URL path extensions
 
-# A FIFO (First-In, First-Out) list to hold pixels waiting to be requested by Roblox
-pixel_queue = []
+# Global state memory cache
+server_state = {
+    "active_password": "1234",  # Fallback default password
+    "pixel_queue": []
+}
 
 # 🌐 INTERACTIVE DRAWING WEB INTERFACE (HTML/CSS/JS)
 HTML_TEMPLATE = """
@@ -16,7 +18,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Build Logic Canvas Matrix</title>
+    <title>Private Studio Matrix</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -37,10 +39,35 @@ HTML_TEMPLATE = """
             box-shadow: 0 10px 30px rgba(0,0,0,0.6);
             border: 1px solid #334155;
             text-align: center;
+            width: 360px;
         }
-        h1 { color: #38bdf8; margin: 0 0 15px 0; font-size: 24px; }
+        h1 { color: #38bdf8; margin: 0 0 15px 0; font-size: 22px; }
         
-        /* 16x16 Canvas Matrix grid styling */
+        .config-section {
+            background-color: #0f172a;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        .config-section label {
+            font-size: 11px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .config-section input {
+            width: 92%;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            padding: 8px;
+            color: white;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
         .grid {
             display: grid;
             grid-template-columns: repeat(16, 20px);
@@ -49,7 +76,8 @@ HTML_TEMPLATE = """
             background-color: #334155;
             padding: 4px;
             border-radius: 8px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
+            justify-content: center;
         }
         .pixel {
             width: 20px;
@@ -57,28 +85,25 @@ HTML_TEMPLATE = """
             background-color: #000000;
             cursor: pointer;
             border-radius: 2px;
-            transition: background 0.1s ease;
         }
-        
-        /* Toolkit layout */
         .palette {
             display: flex;
             justify-content: center;
-            gap: 12px;
-            margin-bottom: 20px;
+            gap: 8px;
+            margin-bottom: 15px;
             background: #0f172a;
-            padding: 10px;
+            padding: 8px;
             border-radius: 8px;
+            flex-wrap: wrap;
         }
         .swatch {
-            width: 35px;
-            height: 35px;
+            width: 30px;
+            height: 30px;
             border-radius: 50%;
             cursor: pointer;
             border: 3px solid transparent;
         }
         .swatch.active { border-color: #ffffff; transform: scale(1.1); }
-        
         .btn {
             background-color: #10b981;
             color: white;
@@ -94,12 +119,7 @@ HTML_TEMPLATE = """
         .btn:hover { background-color: #059669; }
         .clear-btn { background-color: #ef4444; margin-top: 8px; }
         .clear-btn:hover { background-color: #dc2626; }
-        
-        .status-box {
-            margin-top: 15px;
-            font-size: 14px;
-            color: #94a3b8;
-        }
+        .status-box { margin-top: 15px; font-size: 13px; color: #38bdf8; min-height: 20px; }
     </style>
 </head>
 <body>
@@ -107,9 +127,13 @@ HTML_TEMPLATE = """
     <div class="container">
         <h1>🎨 Matrix Studio</h1>
         
-        <!-- Color selections mapping to 6-bit configurations -->
+        <!-- Authentication Configuration Layer -->
+        <div class="config-section">
+            <label>Transmitter Password Setup</label>
+            <input type="text" id="tx-password" value="1234" placeholder="Enter custom pass...">
+        </div>
+        
         <div class="palette">
-            <!-- Colors are predefined with maximum values for their bits -->
             <div class="swatch active" style="background-color: #ff0000;" data-r="3" data-g="0" data-b="0"></div>
             <div class="swatch" style="background-color: #00ff00;" data-r="0" data-g="3" data-b="0"></div>
             <div class="swatch" style="background-color: #0000ff;" data-r="0" data-g="0" data-b="3"></div>
@@ -125,7 +149,7 @@ HTML_TEMPLATE = """
         <button class="btn" onclick="sendFrame()">📤 Send Frame to Roblox</button>
         <button class="btn clear-btn" onclick="clearGrid()">🗑️ Clear Matrix</button>
         
-        <div class="status-box" id="status">Draw your artwork and press Send.</div>
+        <div class="status-box" id="status">Ready. Draw your matrix grid.</div>
     </div>
 
     <script>
@@ -134,41 +158,30 @@ HTML_TEMPLATE = """
         let selectedColor = { r: 3, g: 0, b: 0, hex: '#ff0000' };
         let isDrawing = false;
 
-        // Initialize 16x16 working canvas
+        // Populate Matrix Architecture
         for (let i = 0; i < 256; i++) {
             const pixel = document.createElement('div');
             pixel.classList.add('pixel');
             pixel.dataset.index = i;
-            pixel.dataset.r = "0";
-            pixel.dataset.g = "0";
-            pixel.dataset.b = "0";
+            pixel.dataset.r = "0"; pixel.dataset.g = "0"; pixel.dataset.b = "0";
             
-            // Mouse drawing binds
-            pixel.addEventListener('mousedown', () => { isDrawing = true; paint(pixel); });
+            pixel.addEventListener('mousedown', (e) => { e.preventDefault(); isDrawing = true; paint(pixel); });
             pixel.addEventListener('mouseenter', () => { if(isDrawing) paint(pixel); });
             grid.appendChild(pixel);
         }
         window.addEventListener('mouseup', () => isDrawing = false);
 
-        // Palette Selector logic
         swatches.forEach(swatch => {
             swatch.addEventListener('click', () => {
                 document.querySelector('.swatch.active').classList.remove('active');
                 swatch.classList.add('active');
-                selectedColor = {
-                    r: swatch.dataset.r,
-                    g: swatch.dataset.g,
-                    b: swatch.dataset.b,
-                    hex: swatch.style.backgroundColor
-                };
+                selectedColor = { r: swatch.dataset.r, g: swatch.dataset.g, b: swatch.dataset.b, hex: swatch.style.backgroundColor };
             });
         });
 
         function paint(pixel) {
             pixel.style.backgroundColor = selectedColor.hex;
-            pixel.dataset.r = selectedColor.r;
-            pixel.dataset.g = selectedColor.g;
-            pixel.dataset.b = selectedColor.b;
+            pixel.dataset.r = selectedColor.r; pixel.dataset.g = selectedColor.g; pixel.dataset.b = selectedColor.b;
         }
 
         function clearGrid() {
@@ -179,35 +192,43 @@ HTML_TEMPLATE = """
             document.getElementById('status').innerText = "Matrix cleared.";
         }
 
-        // Convert the structural layout into sequential pixel updates
         async function sendFrame() {
             const pixels = document.querySelectorAll('.pixel');
             const dataPayload = [];
+            const userPass = document.getElementById('tx-password').value;
 
             pixels.forEach(p => {
                 const idx = parseInt(p.dataset.index);
-                dataPayload.push({
-                    index: idx,
-                    x: idx % 16,
-                    y: Math.floor(idx / 16),
-                    r: parseInt(p.dataset.r),
-                    g: parseInt(p.dataset.g),
-                    b: parseInt(p.dataset.b)
+                dataPayload.push({ 
+                    index: idx, 
+                    x: idx % 16, 
+                    y: Math.floor(idx / 16), 
+                    r: parseInt(p.dataset.r), 
+                    g: parseInt(p.dataset.g), 
+                    b: parseInt(p.dataset.b) 
                 });
             });
 
-            document.getElementById('status').innerText = "Streaming matrix array data...";
-
+            document.getElementById('status').innerText = "Compressing & sending queue...";
+            
             try {
                 const response = await fetch('/queue-matrix', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pixels: dataPayload })
+                    body: JSON.stringify({ 
+                        password: userPass,
+                        pixels: dataPayload 
+                    })
                 });
+                
                 const resData = await response.json();
-                document.getElementById('status').innerText = `Success! Enqueued ${resData.count} pixel nodes.`;
+                if (response.ok) {
+                    document.getElementById('status').innerText = `Success! Saved password & enqueued ${resData.count} pixels.`;
+                } else {
+                    document.getElementById('status').innerText = "Error: " + (resData.error || "Failed submission");
+                }
             } catch (err) {
-                document.getElementById('status').innerText = "Error syncing canvas array.";
+                document.getElementById('status').innerText = "Connection error. Check Render log status.";
             }
         }
     </script>
@@ -215,31 +236,34 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# 1. BROWSER GUI ROUTE
-@app.get("/")
+# 1. ROOT ENTRY POINT: Blocked public pathing
+@app.route("/", methods=["GET"])
 def index():
+    abort(404)
+
+# 2. PRIVATE GUI ACCESS VIA SECURED PATH ROUTE
+@app.route(f"/{SECRET_CANVAS_PATH}", methods=["GET"])
+def secret_dashboard():
     return render_template_string(HTML_TEMPLATE)
 
-# 2. WEB APP BACKEND COMPILER: Accepts the drawing and stores pixels sequentially
+# 3. ROOT PATH QUEUE PROCESSING ENDPOINT
 @app.post("/queue-matrix")
 def queue_matrix():
     data = request.json
-    if not data or "pixels" not in data:
-        return jsonify({"error": "Missing payload"}), 400
+    if not data or "pixels" not in data or "password" not in data:
+        return jsonify({"error": "Malformed payload structure"}), 400
     
-    global pixel_queue
-    pixel_queue = [] # Wipe any stale, leftover data strings
+    # Save the custom password defined inside your canvas input text box
+    server_state["active_password"] = str(data["password"])
+    server_state["pixel_queue"] = []  # Clear out history array configurations
 
     for p in data["pixels"]:
-        # Map values (0-3 max) into binary strings of 2 bits each
         bin_r = format(p["r"], '02b')
         bin_g = format(p["g"], '02b')
         bin_b = format(p["b"], '02b')
-        
-        # Merge values to produce a single 6-bit data packet (RR_GG_BB)
         binary_rgb = f"{bin_r}{bin_g}{bin_b}"
         
-        pixel_queue.append({
+        server_state["pixel_queue"].append({
             "pixel_index": p["index"],
             "x": p["x"],
             "y": p["y"],
@@ -249,21 +273,16 @@ def queue_matrix():
             "b_val": p["b"]
         })
         
-    return jsonify({"status": "queued", "count": len(pixel_queue)}), 200
+    return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
 
-# 3. ROBLOX API PIPELINE: Delivers one single pixel per call to the transmitter
 @app.route('/roblox', methods=["GET"])
 def roblox_communication():
-    password = request.headers.get("Password")
-    if password != PASSWORD:
-        return jsonify({"error": "Unauthorized. Invalid password header."}), 401
-    
-    global pixel_queue
-    if len(pixel_queue) > 0:
-        # Pull the oldest pixel out of the array line
-        next_pixel = pixel_queue.pop(0)
-        return jsonify(next_pixel), 200
-    
+    # Read authorization keys passed from the game
+    incoming_pass = request.headers.get("Password")
+    if incoming_pass != server_state["active_password"]:
+        return jsonify({"error": "Unauthorized. Password header mismatch."}), 401
+    if len(server_state["pixel_queue"]) > 0:
+        return jsonify(server_state["pixel_queue"].pop(0)), 200
     return jsonify({"status": "idle"}), 200
 
 if __name__ == '__main__':
