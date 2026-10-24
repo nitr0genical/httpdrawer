@@ -124,20 +124,19 @@ HTML_TEMPLATE = """
     <div class="container">
         <h1>🎨 16x16 Matrix Studio</h1>
         
-        <!-- Authentication Configuration Layer -->
         <div class="config-section">
             <label>Transmitter Password (Game & Web Match)</label>
             <input type="text" id="tx-password" value="1234" placeholder="Enter matching pass...">
         </div>
         
         <div class="palette">
-            <div class="swatch active" style="background-color: #ff0000;" data-r="255" data-g="0" data-b="0"></div>
-            <div class="swatch" style="background-color: #00ff00;" data-r="0" data-g="255" data-b="0"></div>
-            <div class="swatch" style="background-color: #0000ff;" data-r="0" data-g="0" data-b="255"></div>
-            <div class="swatch" style="background-color: #ffff00;" data-r="255" data-g="255" data-b="0"></div>
-            <div class="swatch" style="background-color: #00ffff;" data-r="0" data-g="255" data-b="255"></div>
-            <div class="swatch" style="background-color: #ff00ff;" data-r="255" data-g="0" data-b="255"></div>
-            <div class="swatch" style="background-color: #ffffff;" data-r="255" data-g="255" data-b="255"></div>
+            <div class="swatch active" style="background-color: #ff0000;" data-r="3" data-g="0" data-b="0"></div>
+            <div class="swatch" style="background-color: #00ff00;" data-r="0" data-g="3" data-b="0"></div>
+            <div class="swatch" style="background-color: #0000ff;" data-r="0" data-g="0" data-b="3"></div>
+            <div class="swatch" style="background-color: #ffff00;" data-r="3" data-g="3" data-b="0"></div>
+            <div class="swatch" style="background-color: #00ffff;" data-r="0" data-g="3" data-b="3"></div>
+            <div class="swatch" style="background-color: #ff00ff;" data-r="3" data-g="0" data-b="3"></div>
+            <div class="swatch" style="background-color: #ffffff;" data-r="3" data-g="3" data-b="3"></div>
             <div class="swatch" style="background-color: #000000;" data-r="0" data-g="0" data-b="0"></div>
         </div>
 
@@ -152,7 +151,7 @@ HTML_TEMPLATE = """
     <script>
         const grid = document.getElementById('pixel-matrix');
         const swatches = document.querySelectorAll('.swatch');
-        let selectedColor = { r: 255, g: 0, b: 0, hex: '#ff0000' };
+        let selectedColor = { r: 3, g: 0, b: 0, hex: '#ff0000' };
         let isDrawing = false;
 
         for (let i = 0; i < 256; i++) {
@@ -239,12 +238,10 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# 1. PUBLIC ROOT ENTRY POINT (Now opens the drawing tool immediately)
 @app.route("/", methods=["GET"])
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-# 2. QUEUE PROCESSING ENDPOINT (Receives from Web)
 @app.post("/queue-matrix")
 def queue_matrix():
     data = request.json
@@ -255,29 +252,34 @@ def queue_matrix():
     server_state["pixel_queue"] = []
 
     for p in data["pixels"]:
+        # Convert RGB values to 2-bit binary strings and combine into 6-bit string
+        bin_r = format(p["r"] & 3, '02b')
+        bin_g = format(p["g"] & 3, '02b')
+        bin_b = format(p["b"] & 3, '02b')
+        binary_rgb = f"{bin_r}{bin_g}{bin_b}"
+        
         server_state["pixel_queue"].append({
             "pixel_index": p["index"],
             "x": p["x"],
             "y": p["y"],
-            "r": p["r"],
-            "g": p["g"],
-            "b": p["b"]
+            "value": binary_rgb  # Format expected by the game block
         })
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
 
-# 3. ROBLOX HTTP TRANSMITTER ENDPOINT
 @app.route('/roblox', methods=["GET"])
 def roblox_communication():
     incoming_pass = request.headers.get("Password")
     
     if incoming_pass != server_state["active_password"]:
-        return jsonify({"error": "Unauthorized. Password mismatch."}), 401
+        return jsonify({"value": "000000"}), 401
         
+    # Pop the next pixel in sequence from left-to-right, top-to-bottom
     if len(server_state["pixel_queue"]) > 0:
         return jsonify(server_state["pixel_queue"].pop(0)), 200
         
-    return jsonify({"status": "idle"}), 200
+    # Return a dummy 6-bit black string instead of nil/idle so the game script doesn't crash
+    return jsonify({"value": "000000"}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
