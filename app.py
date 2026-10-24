@@ -16,7 +16,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>16x16 Matrix Transmitter Studio</title>
+    <title>15x15 Matrix Transmitter Studio</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -68,8 +68,8 @@ HTML_TEMPLATE = """
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(16, 20px);
-            grid-template-rows: repeat(16, 20px);
+            grid-template-columns: repeat(15, 20px);
+            grid-template-rows: repeat(15, 20px);
             gap: 1px;
             background-color: #334155;
             padding: 4px;
@@ -126,7 +126,7 @@ HTML_TEMPLATE = """
 <body>
 
     <div class="container">
-        <h1>🎨 16x16 Matrix Studio</h1>
+        <h1>🎨 15x15 Matrix Studio</h1>
         
         <div class="config-section">
             <label>Transmitter Password (Game & Web Match)</label>
@@ -159,7 +159,8 @@ HTML_TEMPLATE = """
         let selectedColor = { r: 3, g: 0, b: 0, hex: '#ff0000' };
         let isDrawing = false;
 
-        for (let i = 0; i < 256; i++) {
+        // 15x15 grid = 225 pixels total
+        for (let i = 0; i < 225; i++) {
             const pixel = document.createElement('div');
             pixel.classList.add('pixel');
             pixel.dataset.index = i;
@@ -204,7 +205,7 @@ HTML_TEMPLATE = """
             const dataPayload = [];
             const userPass = document.getElementById('tx-password').value;
 
-            // Find the last pixel that has color (to auto-stop trailing empty pixels)
+            // Find the last active pixel on a 15x15 grid
             let lastActiveIndex = -1;
             pixels.forEach((p, idx) => {
                 if (parseInt(p.dataset.r) > 0 || parseInt(p.dataset.g) > 0 || parseInt(p.dataset.b) > 0) {
@@ -212,26 +213,24 @@ HTML_TEMPLATE = """
                 }
             });
 
-            // If nothing is drawn, don't transmit
             if (lastActiveIndex === -1) {
                 document.getElementById('status').innerText = "Matrix is empty! Draw something first.";
                 return;
             }
 
-            // Only queue pixels up to the last drawn pixel
             for (let i = 0; i <= lastActiveIndex; i++) {
                 const p = pixels[i];
                 dataPayload.push({ 
                     index: i, 
-                    x: i % 16, 
-                    y: Math.floor(i / 16), 
+                    x: i % 15, 
+                    y: Math.floor(i / 15), 
                     r: parseInt(p.dataset.r), 
                     g: parseInt(p.dataset.g), 
                     b: parseInt(p.dataset.b) 
                 });
             }
 
-            document.getElementById('status').innerText = `Transmitting ${dataPayload.count || dataPayload.length} active pixels...`;
+            document.getElementById('status').innerText = `Transmitting ${dataPayload.length} active pixels...`;
             
             try {
                 const response = await fetch('/queue-matrix', {
@@ -293,16 +292,17 @@ def queue_matrix():
     server_state["pixel_queue"] = []
     server_state["reset_signal"] = False
 
+    # 1. Automatically prepend a Reset signal at the very beginning of the queue
+    server_state["pixel_queue"].append({"value": "00000010"})
+
+    # 2. Append active pixels up to the last drawn pixel (1 step per pixel for max speed)
     for p in data["pixels"]:
         bin_r = format(p["r"] & 3, '02b')
         bin_g = format(p["g"] & 3, '02b')
         bin_b = format(p["b"] & 3, '02b')
         rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
         
-        # Step 1: Data Setup (Clock = 0, Reset = 0) -> Screen registers RRGGBB first
-        server_state["pixel_queue"].append({"value": f"{rgb_6bit}00"})
-        
-        # Step 2: Clock Pulse (Clock = 1, Reset = 0) -> Screen clocks the data in
+        # 8-bit format: [6-bit RGB] + [Reset (0)] + [Clock (1)]
         server_state["pixel_queue"].append({"value": f"{rgb_6bit}01"})
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
