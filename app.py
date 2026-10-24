@@ -5,7 +5,8 @@ app = Flask(__name__)
 # Global state memory cache
 server_state = {
     "active_password": "1234",
-    "pixel_queue": []
+    "pixel_queue": [],
+    "reset_signal": False
 }
 
 # 🌐 INTERACTIVE DRAWING WEB INTERFACE (HTML/CSS/JS)
@@ -240,7 +241,7 @@ HTML_TEMPLATE = """
 
         async function stopTransmission() {
             const userPass = document.getElementById('tx-password').value;
-            document.getElementById('status').innerText = "Stopping transmission...";
+            document.getElementById('status').innerText = "Sending stop & reset signal...";
 
             try {
                 const response = await fetch('/stop-queue', {
@@ -250,7 +251,7 @@ HTML_TEMPLATE = """
                 });
                 
                 if (response.ok) {
-                    document.getElementById('status').innerText = "🛑 Transmission stopped & queue cleared!";
+                    document.getElementById('status').innerText = "🛑 Transmission stopped & screen reset signaled!";
                 } else {
                     document.getElementById('status').innerText = "Failed to stop.";
                 }
@@ -275,25 +276,30 @@ def queue_matrix():
     
     server_state["active_password"] = str(data["password"])
     server_state["pixel_queue"] = []
+    server_state["reset_signal"] = False  # Clear reset signal when new frame starts
 
     for p in data["pixels"]:
+        # 6-bit RGB (2 bits each)
         bin_r = format(p["r"] & 3, '02b')
         bin_g = format(p["g"] & 3, '02b')
         bin_b = format(p["b"] & 3, '02b')
-        binary_rgb = f"{bin_r}{bin_g}{bin_b}"
+        rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
+        
+        # 8-bit format: [6-bit RGB] + [Reset (0)] + [Clock (1)]
+        bit_string = f"{rgb_6bit}01"
         
         server_state["pixel_queue"].append({
-            "value": binary_rgb
+            "value": bit_string
         })
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
 
-# NEW: Stop endpoint to instantly empty the queue from the website
 @app.post("/stop-queue")
 def stop_queue():
     data = request.json
     if data and "password" in data and str(data["password"]) == server_state["active_password"]:
         server_state["pixel_queue"] = []
+        server_state["reset_signal"] = True  # Trigger reset signal for the game
         return jsonify({"status": "stopped"}), 200
     return jsonify({"error": "Unauthorized"}), 401
 
@@ -301,13 +307,21 @@ def stop_queue():
 def roblox_communication():
     incoming_pass = request.headers.get("Password")
     
+    # Return 200 OK with a default safe value on password mismatch to prevent Roblox HTTP error spam
     if incoming_pass != server_state["active_password"]:
-        return jsonify({"value": "000000"}), 401
+        return jsonify({"value": "00000000"}), 200
         
+    # If a stop/reset signal was triggered from the website
+    if server_state["reset_signal"]:
+        server_state["reset_signal"] = False
+        return jsonify({"value": "00000010"}), 200  # RGB=000000, Reset=1, Clock=0
+        
+    # Pop next pixel in queue: 8-bit value (RGB + Reset(0) + Clock(1))
     if len(server_state["pixel_queue"]) > 0:
         return jsonify(server_state["pixel_queue"].pop(0)), 200
         
-    return jsonify({"value": "000000"}), 200
+    # Default idle response (No reset, no clock)
+    return jsonify({"value": "00000000"}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
