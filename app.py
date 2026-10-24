@@ -9,14 +9,14 @@ server_state = {
     "reset_signal": False
 }
 
-# INTERACTIVE DRAWING WEB INTERFACE (HTML/CSS/JS)
+# 🌐 INTERACTIVE DRAWING WEB INTERFACE (HTML/CSS/JS)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Httpmitter Drawer</title>
+    <title>16x16 Matrix Transmitter Studio</title>
     <style>
         body {
             font-family: 'Courier New', Courier, monospace;
@@ -296,17 +296,17 @@ def queue_matrix():
     server_state["pixel_queue"] = []
     server_state["reset_signal"] = False
 
+    # 1. Initial Reset signal with clock high (or low depending on your preference)
+    server_state["pixel_queue"].append({"value": "00000011"})
+
+    # 2. Stream pixels with Clock permanently set to 1 (C=1)
     for idx, p in enumerate(data["pixels"]):
         bin_r = format(p["r"] & 3, '02b')
         bin_g = format(p["g"] & 3, '02b')
         bin_b = format(p["b"] & 3, '02b')
         rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
         
-        if idx == 0:
-            server_state["pixel_queue"].append({"value": f"{rgb_6bit}10"})
-        else:
-            server_state["pixel_queue"].append({"value": f"{rgb_6bit}00"})
-            
+        # Reset=0, Clock=1 (Always active clock)
         server_state["pixel_queue"].append({"value": f"{rgb_6bit}01"})
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
