@@ -204,19 +204,34 @@ HTML_TEMPLATE = """
             const dataPayload = [];
             const userPass = document.getElementById('tx-password').value;
 
-            pixels.forEach(p => {
-                const idx = parseInt(p.dataset.index);
+            // Find the last pixel that has color (to auto-stop trailing empty pixels)
+            let lastActiveIndex = -1;
+            pixels.forEach((p, idx) => {
+                if (parseInt(p.dataset.r) > 0 || parseInt(p.dataset.g) > 0 || parseInt(p.dataset.b) > 0) {
+                    lastActiveIndex = idx;
+                }
+            });
+
+            // If nothing is drawn, don't transmit
+            if (lastActiveIndex === -1) {
+                document.getElementById('status').innerText = "Matrix is empty! Draw something first.";
+                return;
+            }
+
+            // Only queue pixels up to the last drawn pixel
+            for (let i = 0; i <= lastActiveIndex; i++) {
+                const p = pixels[i];
                 dataPayload.push({ 
-                    index: idx, 
-                    x: idx % 16, 
-                    y: Math.floor(idx / 16), 
+                    index: i, 
+                    x: i % 16, 
+                    y: Math.floor(i / 16), 
                     r: parseInt(p.dataset.r), 
                     g: parseInt(p.dataset.g), 
                     b: parseInt(p.dataset.b) 
                 });
-            });
+            }
 
-            document.getElementById('status').innerText = "Transmitting frame queue...";
+            document.getElementById('status').innerText = `Transmitting ${dataPayload.count || dataPayload.length} active pixels...`;
             
             try {
                 const response = await fetch('/queue-matrix', {
@@ -230,7 +245,7 @@ HTML_TEMPLATE = """
                 
                 const resData = await response.json();
                 if (response.ok) {
-                    document.getElementById('status').innerText = `Success! Transmitting ${resData.count} pixels to game.`;
+                    document.getElementById('status').innerText = `Success! Streaming up to pixel ${lastActiveIndex}.`;
                 } else {
                     document.getElementById('status').innerText = "Error: " + (resData.error || "Failed submission");
                 }
@@ -241,7 +256,7 @@ HTML_TEMPLATE = """
 
         async function stopTransmission() {
             const userPass = document.getElementById('tx-password').value;
-            document.getElementById('status').innerText = "Sending stop & reset signal...";
+            document.getElementById('status').innerText = "Stopping transmission & resetting screen...";
 
             try {
                 const response = await fetch('/stop-queue', {
@@ -251,7 +266,7 @@ HTML_TEMPLATE = """
                 });
                 
                 if (response.ok) {
-                    document.getElementById('status').innerText = "🛑 Transmission stopped & screen reset signaled!";
+                    document.getElementById('status').innerText = "🛑 Transmission stopped & screen reset!";
                 } else {
                     document.getElementById('status').innerText = "Failed to stop.";
                 }
@@ -276,21 +291,19 @@ def queue_matrix():
     
     server_state["active_password"] = str(data["password"])
     server_state["pixel_queue"] = []
-    server_state["reset_signal"] = False  # Clear reset signal when new frame starts
+    server_state["reset_signal"] = False
 
     for p in data["pixels"]:
-        # 6-bit RGB (2 bits each)
         bin_r = format(p["r"] & 3, '02b')
         bin_g = format(p["g"] & 3, '02b')
         bin_b = format(p["b"] & 3, '02b')
         rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
         
-        # 8-bit format: [6-bit RGB] + [Reset (0)] + [Clock (1)]
-        bit_string = f"{rgb_6bit}01"
+        # Step 1: Data Setup (Clock = 0, Reset = 0) -> Screen registers RRGGBB first
+        server_state["pixel_queue"].append({"value": f"{rgb_6bit}00"})
         
-        server_state["pixel_queue"].append({
-            "value": bit_string
-        })
+        # Step 2: Clock Pulse (Clock = 1, Reset = 0) -> Screen clocks the data in
+        server_state["pixel_queue"].append({"value": f"{rgb_6bit}01"})
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
 
@@ -299,7 +312,7 @@ def stop_queue():
     data = request.json
     if data and "password" in data and str(data["password"]) == server_state["active_password"]:
         server_state["pixel_queue"] = []
-        server_state["reset_signal"] = True  # Trigger reset signal for the game
+        server_state["reset_signal"] = True
         return jsonify({"status": "stopped"}), 200
     return jsonify({"error": "Unauthorized"}), 401
 
@@ -307,20 +320,17 @@ def stop_queue():
 def roblox_communication():
     incoming_pass = request.headers.get("Password")
     
-    # Return 200 OK with a default safe value on password mismatch to prevent Roblox HTTP error spam
+    # Return safe dummy value instead of failing/spamming logs if password doesn't match
     if incoming_pass != server_state["active_password"]:
         return jsonify({"value": "00000000"}), 200
         
-    # If a stop/reset signal was triggered from the website
     if server_state["reset_signal"]:
         server_state["reset_signal"] = False
-        return jsonify({"value": "00000010"}), 200  # RGB=000000, Reset=1, Clock=0
+        return jsonify({"value": "00000010"}), 200  # Reset=1, Clock=0
         
-    # Pop next pixel in queue: 8-bit value (RGB + Reset(0) + Clock(1))
     if len(server_state["pixel_queue"]) > 0:
         return jsonify(server_state["pixel_queue"].pop(0)), 200
         
-    # Default idle response (No reset, no clock)
     return jsonify({"value": "00000000"}), 200
 
 if __name__ == '__main__':
