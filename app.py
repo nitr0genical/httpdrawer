@@ -290,21 +290,17 @@ def queue_matrix():
     server_state["pixel_queue"] = []
     server_state["reset_signal"] = False
 
-    # Queue pixels using two-step clock pulse per pixel
-    for idx, p in enumerate(data["pixels"]):
+    # 1. Send clean reset pulse first
+    server_state["pixel_queue"].append({"value": "00000010"})
+
+    # 2. Send 1 step per pixel (Data + Clock combined into a single entry)
+    for p in data["pixels"]:
         bin_r = format(p["r"] & 3, '02b')
         bin_g = format(p["g"] & 3, '02b')
         bin_b = format(p["b"] & 3, '02b')
         rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
         
-        if idx == 0:
-            # First pixel triggers screen reset simultaneously with its data setup (Reset=1, Clock=0)
-            server_state["pixel_queue"].append({"value": f"{rgb_6bit}10"})
-        else:
-            # Regular data setup (Reset=0, Clock=0)
-            server_state["pixel_queue"].append({"value": f"{rgb_6bit}00"})
-            
-        # Step B: Clock Tick (Reset=0, Clock=1)
+        # Combined: Reset=0, Clock=1 in the same string
         server_state["pixel_queue"].append({"value": f"{rgb_6bit}01"})
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
@@ -321,9 +317,6 @@ def stop_queue():
 @app.route('/roblox', methods=["GET"])
 def roblox_communication():
     incoming_pass = request.headers.get("Password")
-    
-    # Read optional GET parameters sent from the game if configured
-    client_status = request.args.get("client_status", "unknown")
     
     if incoming_pass != server_state["active_password"]:
         return jsonify({"value": "00000000"}), 200
