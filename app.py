@@ -9,19 +9,19 @@ server_state = {
     "reset_signal": False
 }
 
-# 🌐 INTERACTIVE DRAWING WEB INTERFACE (HTML/CSS/JS)
+# INTERACTIVE DRAWING WEB INTERFACE (HTML/CSS/JS)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>16x16 Matrix Transmitter Studio</title>
+    <title>Httpmitter Drawer</title>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #090d16;
+            color: #cbd5e1;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -31,96 +31,101 @@ HTML_TEMPLATE = """
             padding: 20px;
         }
         .container {
-            background-color: #1e293b;
-            padding: 25px;
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-            border: 1px solid #334155;
+            background-color: #111827;
+            padding: 20px;
+            border-radius: 0px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+            border: 2px solid #374151;
             text-align: center;
             width: 380px;
         }
-        h1 { color: #38bdf8; margin: 0 0 15px 0; font-size: 22px; }
+        h1 { color: #f8fafc; margin: 0 0 15px 0; font-size: 20px; text-transform: uppercase; letter-spacing: 1px; }
         
         .config-section {
-            background-color: #0f172a;
-            padding: 12px;
-            border-radius: 8px;
+            background-color: #1f2937;
+            padding: 10px;
+            border-radius: 0px;
             margin-bottom: 15px;
             text-align: left;
+            border: 1px solid #374151;
         }
         .config-section label {
-            font-size: 11px;
-            color: #94a3b8;
+            font-size: 10px;
+            color: #9ca3af;
             text-transform: uppercase;
             font-weight: bold;
             display: block;
             margin-bottom: 4px;
         }
         .config-section input {
-            width: 92%;
-            background-color: #1e293b;
-            border: 1px solid #334155;
-            padding: 8px;
-            color: white;
-            border-radius: 4px;
+            width: 93%;
+            background-color: #111827;
+            border: 1px solid #4b5563;
+            padding: 6px;
+            color: #f8fafc;
+            border-radius: 0px;
             font-family: monospace;
         }
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(16, 20px);
-            grid-template-rows: repeat(16, 20px);
+            grid-template-columns: repeat(16, 18px);
+            grid-template-rows: repeat(16, 18px);
             gap: 1px;
-            background-color: #334155;
+            background-color: #374151;
             padding: 4px;
-            border-radius: 8px;
+            border-radius: 0px;
             margin-bottom: 15px;
             justify-content: center;
+            border: 1px solid #4b5563;
         }
         .pixel {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             background-color: #000000;
             cursor: pointer;
-            border-radius: 2px;
+            border-radius: 0px;
         }
         .palette {
             display: flex;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
             margin-bottom: 15px;
-            background: #0f172a;
+            background: #1f2937;
             padding: 8px;
-            border-radius: 8px;
+            border-radius: 0px;
+            border: 1px solid #374151;
             flex-wrap: wrap;
         }
         .swatch {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            border-radius: 0px;
             cursor: pointer;
-            border: 3px solid transparent;
+            border: 2px solid #374151;
         }
-        .swatch.active { border-color: #ffffff; transform: scale(1.1); }
+        .swatch.active { border-color: #ffffff; }
         .btn {
-            background-color: #10b981;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 15px;
+            background-color: #374151;
+            color: #f8fafc;
+            border: 1px solid #4b5563;
+            padding: 10px;
+            font-size: 13px;
             font-weight: bold;
-            border-radius: 8px;
+            text-transform: uppercase;
+            border-radius: 0px;
             cursor: pointer;
             width: 100%;
-            transition: 0.2s;
-            margin-bottom: 8px;
+            transition: 0.1s;
+            margin-bottom: 6px;
+            font-family: 'Courier New', Courier, monospace;
         }
-        .btn:hover { background-color: #059669; }
-        .stop-btn { background-color: #f59e0b; }
-        .stop-btn:hover { background-color: #d97706; }
-        .clear-btn { background-color: #ef4444; }
-        .clear-btn:hover { background-color: #dc2626; }
-        .status-box { margin-top: 15px; font-size: 13px; color: #38bdf8; min-height: 20px; }
+        .btn:hover { background-color: #4b5563; color: #ffffff; }
+        .transmit-btn { background-color: #1f2937; border-color: #6b7280; }
+        .transmit-btn:hover { background-color: #374151; }
+        
+        .status-box { margin-top: 12px; font-size: 12px; color: #9ca3af; min-height: 18px; }
+        .credits { margin-top: 15px; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; }
     </style>
 </head>
 <body>
@@ -129,8 +134,8 @@ HTML_TEMPLATE = """
         <h1>Httpmitter</h1>
         
         <div class="config-section">
-            <label>Transmitter Password (Game & Web Match)</label>
-            <input type="text" id="tx-password" value="1234" placeholder="enter matching pass...">
+            <label>Transmitter Password</label>
+            <input type="text" id="tx-password" value="1234" placeholder="enter pass...">
         </div>
         
         <div class="palette">
@@ -146,11 +151,12 @@ HTML_TEMPLATE = """
 
         <div class="grid" id="pixel-matrix"></div>
 
-        <button class="btn" onclick="sendFrame()">transmit frame</button>
-        <button class="btn stop-btn" onclick="stopTransmission()">force stop transmission + reset screen</button>
-        <button class="btn clear-btn" onclick="clearGrid()">clear drawing frame</button>
+        <button class="btn transmit-btn" onclick="sendFrame()">Transmit Frame</button>
+        <button class="btn" onclick="stopTransmission()">Force Stop + Reset</button>
+        <button class="btn" onclick="clearGrid()">Clear Frame</button>
         
-        <div class="status-box" id="status">ready</div>
+        <div class="status-box" id="status">Ready</div>
+        <div class="credits">Powered by Gemini AI</div>
     </div>
 
     <script>
@@ -196,7 +202,7 @@ HTML_TEMPLATE = """
                 p.style.backgroundColor = '#000000';
                 p.dataset.r = "0"; p.dataset.g = "0"; p.dataset.b = "0";
             });
-            document.getElementById('status').innerText = "Matrix cleared locally.";
+            document.getElementById('status').innerText = "Matrix cleared locally";
         }
 
         async function sendFrame() {
@@ -212,7 +218,7 @@ HTML_TEMPLATE = """
             });
 
             if (lastActiveIndex === -1) {
-                document.getElementById('status').innerText = "frame is empty! draw something first.";
+                document.getElementById('status').innerText = "Frame is empty!";
                 return;
             }
 
@@ -228,7 +234,7 @@ HTML_TEMPLATE = """
                 });
             }
 
-            document.getElementById('status').innerText = `transmitting ${dataPayload.length} active pixels...`;
+            document.getElementById('status').innerText = `Transmitting ${dataPayload.length} pixels...`;
             
             try {
                 const response = await fetch('/queue-matrix', {
@@ -242,18 +248,18 @@ HTML_TEMPLATE = """
                 
                 const resData = await response.json();
                 if (response.ok) {
-                    document.getElementById('status').innerText = `success`;
+                    document.getElementById('status').innerText = "Success";
                 } else {
-                    document.getElementById('status').innerText = "error: " + (resData.error || "Failed submission");
+                    document.getElementById('status').innerText = "Error: " + (resData.error || "Failed");
                 }
             } catch (err) {
-                document.getElementById('status').innerText = "connection error.";
+                document.getElementById('status').innerText = "Connection error";
             }
         }
 
         async function stopTransmission() {
             const userPass = document.getElementById('tx-password').value;
-            document.getElementById('status').innerText = "stopping transmission & resetting screen";
+            document.getElementById('status').innerText = "Stopping & resetting...";
 
             try {
                 const response = await fetch('/stop-queue', {
@@ -263,12 +269,12 @@ HTML_TEMPLATE = """
                 });
                 
                 if (response.ok) {
-                    document.getElementById('status').innerText = "stopped + reset";
+                    document.getElementById('status').innerText = "Stopped + Reset";
                 } else {
-                    document.getElementById('status').innerText = "error";
+                    document.getElementById('status').innerText = "Error";
                 }
             } catch (err) {
-                document.getElementById('status').innerText = "connection error.";
+                document.getElementById('status').innerText = "Connection error";
             }
         }
     </script>
@@ -290,17 +296,17 @@ def queue_matrix():
     server_state["pixel_queue"] = []
     server_state["reset_signal"] = False
 
-    # 1. Send clean reset pulse first
-    server_state["pixel_queue"].append({"value": "00000010"})
-
-    # 2. Send 1 step per pixel (Data + Clock combined into a single entry)
-    for p in data["pixels"]:
+    for idx, p in enumerate(data["pixels"]):
         bin_r = format(p["r"] & 3, '02b')
         bin_g = format(p["g"] & 3, '02b')
         bin_b = format(p["b"] & 3, '02b')
         rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
         
-        # Combined: Reset=0, Clock=1 in the same string
+        if idx == 0:
+            server_state["pixel_queue"].append({"value": f"{rgb_6bit}10"})
+        else:
+            server_state["pixel_queue"].append({"value": f"{rgb_6bit}00"})
+            
         server_state["pixel_queue"].append({"value": f"{rgb_6bit}01"})
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
@@ -317,13 +323,14 @@ def stop_queue():
 @app.route('/roblox', methods=["GET"])
 def roblox_communication():
     incoming_pass = request.headers.get("Password")
+    client_status = request.args.get("client_status", "unknown")
     
     if incoming_pass != server_state["active_password"]:
         return jsonify({"value": "00000000"}), 200
         
     if server_state["reset_signal"]:
         server_state["reset_signal"] = False
-        return jsonify({"value": "00000010"}), 200  # Reset=1, Clock=0
+        return jsonify({"value": "00000010"}), 200  
         
     if len(server_state["pixel_queue"]) > 0:
         return jsonify(server_state["pixel_queue"].pop(0)), 200
