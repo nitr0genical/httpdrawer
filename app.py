@@ -159,7 +159,6 @@ HTML_TEMPLATE = """
         let selectedColor = { r: 3, g: 0, b: 0, hex: '#ff0000' };
         let isDrawing = false;
 
-        // 15x15 grid = 225 pixels total
         for (let i = 0; i < 225; i++) {
             const pixel = document.createElement('div');
             pixel.classList.add('pixel');
@@ -205,7 +204,6 @@ HTML_TEMPLATE = """
             const dataPayload = [];
             const userPass = document.getElementById('tx-password').value;
 
-            // Find the last active pixel on a 15x15 grid
             let lastActiveIndex = -1;
             pixels.forEach((p, idx) => {
                 if (parseInt(p.dataset.r) > 0 || parseInt(p.dataset.g) > 0 || parseInt(p.dataset.b) > 0) {
@@ -292,17 +290,20 @@ def queue_matrix():
     server_state["pixel_queue"] = []
     server_state["reset_signal"] = False
 
-    # 1. Automatically prepend a Reset signal at the very beginning of the queue
+    # 1. Screen Reset pulse at the very beginning
     server_state["pixel_queue"].append({"value": "00000010"})
 
-    # 2. Append active pixels up to the last drawn pixel (1 step per pixel for max speed)
+    # 2. For each pixel, push TWO steps: Data Setup (Clock=0) then Clock Pulse (Clock=1)
     for p in data["pixels"]:
         bin_r = format(p["r"] & 3, '02b')
         bin_g = format(p["g"] & 3, '02b')
         bin_b = format(p["b"] & 3, '02b')
         rgb_6bit = f"{bin_r}{bin_g}{bin_b}"
         
-        # 8-bit format: [6-bit RGB] + [Reset (0)] + [Clock (1)]
+        # Step A: Send Data with Clock OFF (0) so screen reads RRGGBB first
+        server_state["pixel_queue"].append({"value": f"{rgb_6bit}00"})
+        
+        # Step B: Send Data with Clock ON (1) right after to clock it in
         server_state["pixel_queue"].append({"value": f"{rgb_6bit}01"})
         
     return jsonify({"status": "synchronized", "count": len(server_state["pixel_queue"])}), 200
@@ -320,7 +321,6 @@ def stop_queue():
 def roblox_communication():
     incoming_pass = request.headers.get("Password")
     
-    # Return safe dummy value instead of failing/spamming logs if password doesn't match
     if incoming_pass != server_state["active_password"]:
         return jsonify({"value": "00000000"}), 200
         
